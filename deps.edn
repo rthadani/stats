@@ -1,0 +1,18 @@
+{:paths ["src" "resources"]
+ :deps {org.clojure/clojure {:mvn/version "1.10.1"}
+        scicloj/scicloj.ml   {:mvn/version "0.1.0-beta3"}
+        scicloj/notespace    {:mvn/version "4-pre-alpha-2-SNAPSHOT"}
+        org.scicloj/viz.clj  {:mvn/version "0.1.0-SNAPSHOT"}
+        techascent/tech.viz  {:mvn/version "6.00-beta-16-2"}}
+ :aliases
+ {:test {:extra-paths ["test"]
+         :extra-deps {org.clojure/test.check {:mvn/version "1.0.0"}}}
+  :runner
+  {:extra-deps {com.cognitect/test-runner
+                {:git/url "https://github.com/cognitect-labs/test-runner"
+                 :sha "b6b3193fcc42659d7e46ecd1884a228993441182"}}
+   :main-opts ["-m" "cognitect.test-runner"
+               "-d" "test"]}
+  :uberjar {:extra-deps {seancorfield/depstar {:mvn/version "1.1.128"}}
+            :main-opts ["-m" "hf.depstar.uberjar" "stats.jar"
+                        "-C" "-m" "statistics-is-easy.stats"]}}}
