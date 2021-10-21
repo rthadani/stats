@@ -1,6 +1,8 @@
 (ns stats.statistics-is-easy.chapter-1
   (:require [aerial.hanami.templates :as ht]
             [kixi.stats.distribution :as kstatsd]
+            [kixi.stats.test :as ktest]
+            [kixi.stats.core :as kcore]
             [scicloj.notespace.v4.api :as notespace]
             [scicloj.kindly.kind :as kind] ; a collection of known kinds of notes
             [scicloj.kindly.api :as kindly]
@@ -55,6 +57,12 @@
     {:count-good count-good
      :num-bootstraps num-bootstraps
      :observed-probability (float (/ count-good num-bootstraps))}))
+
+;;calculate the p-value
+;;For standard deviation example here 
+;;https://stats.stackexchange.com/questions/21581/how-to-assess-whether-a-coin-tossed-900-times-and-comes-up-heads-490-times-is-bi
+(def population 17)
+(ktest/p-value (ktest/simple-z-test {:mu (/ population 2) :sd (Math/sqrt (* (/ 1 2) (/ 1 2) (/ population 2)))} {:mean 15 :n 17}))
 
 (defn print-results [{:keys [count-good num-bootstraps observed-probability]} label]
   (println (format "%s -- %d out of %d times we got atleast the %d number of heads in %d tosses\nProbability that chance alone gave us atleast %d heads in %d tosses is %f" label count-good num-bootstraps 15 17 15 17 observed-probability)))
@@ -114,6 +122,8 @@
       observed-probability (float (/ count-good 10000))]
   (println (format "%d out of %d experiments had a difference of two means greater than or equal to %f\nThe chance of getting a difference of two means greater than or equal to %f is %f" count-good 10000 observed-diff observed-diff observed-probability)))
 
+;;Would like to know if this is correct
+(ktest/p-value (ktest/simple-t-test {:mu (kcore/mean placebo) :sd (kcore/standard-deviation placebo)}  {:mean (kcore/mean drug) :n (count drug)}))
 ;;(kstatsd/sample 100 (kstatsd/t {:v (dec (count drug))}))
 
 ;;confidence intervals for differennce in means
@@ -125,8 +135,8 @@
 #_(bootstrap-avg drug)
 
 (defn confidence-intervals
-  [percentile num-bootstraps drug placebo]
-  (let [edge (/ (- 1 percentile) 2)
+  [percentile num-bootstraps drug placebo tails]
+  (let [edge (/ (- 1 percentile) tails)
         lower-index (Math/ceil (* edge num-bootstraps))
         upper-index (Math/floor (* (- 1 edge) num-bootstraps))
         diffs (-> (repeatedly num-bootstraps #(- (bootstrap-avg drug) (bootstrap-avg placebo)))
@@ -136,4 +146,4 @@
      :min (first diffs)
      :max (last diffs)}))
 
-#_(confidence-intervals 0.90 10000 drug placebo)
+#_(confidence-intervals 0.90 10000 drug placebo 2)
