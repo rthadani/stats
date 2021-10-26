@@ -1,4 +1,4 @@
-(ns stats.statistics-is-easy.chapter-4
+(ns stats.statistics-is-easy.chapter-4-chi-squared
   (:require [scicloj.notespace.v4.api :as notespace]
             [fastmath.random :as rand]
             [kixi.stats.core :as kcore]
@@ -117,22 +117,16 @@
             (assoc-in with-total [key :total] (apply + (vals row))))
           wealth-table
           wealth-table))
-#_(wealth-table-with-totals wealth-table)
-#_(->> wealth-table wealth-table-with-totals vals
-       (mapcat #(dissoc % :total))
-       (group-by first)
-       vals
-       (map #(apply + (map second %))))
 
 (defn flatten-table
   [table-with-totals]
-  (let [row-totals (map :total (vals table-with-totals))
-        col-totals (->> table-with-totals
-                        vals
-                        (mapcat #(dissoc % :total))
-                        (group-by first)
-                        vals
-                        (map #(apply + (map second %))))
+  (let [row-totals (vec (map :total (vals table-with-totals)))
+        col-totals (vec (->> table-with-totals
+                             vals
+                             (mapcat #(dissoc % :total))
+                             (group-by first)
+                             vals
+                             (map #(apply + (map second %)))))
         total-pop (apply + col-totals)
         expected (vec (for [rt row-totals ct col-totals] (float (* ct (/ rt total-pop)))))]
     (prn (apply + expected))
@@ -140,15 +134,48 @@
                 [col val] cols
                 :when (not= col :total)]
             [(str (name key) ":" (name col)) val]) $
-      (reduce (fn [table [k v]]
-                (-> table
-                    (update :description conj k)
-                    (update :observed conj v)))
-              {:description [] :observed [] :expected []} $)
-      (assoc $ :expected expected :row-totals (vec row-totals) :column-totals (vec col-totals)))))
+      (r/reduce (fn [table [k v]]
+                  (-> table
+                      (update :description conj k)
+                      (update :observed conj v)))
+                {:description [] :observed [] :expected [] :row-totals row-totals :col-totals col-totals} $)
+      (assoc $ :expected expected))))
+
+(defn fill-indices
+  [totals]
+  (->> totals
+       (map-indexed (fn [i r] [i r]))
+       (mapcat (fn [[i r]] (repeat r i)))
+       vec))
 
 (defn chi-shuffle
-  [observed row-ttoal])
+  [row-totals col-totals]
+  (let [row-indexes (fill-indices row-totals)
+        col-indexes  (fill-indices col-totals)
+        shuffled-col-indexes (vec (shuffle col-indexes))
+        n-rows (count row-totals)
+        n-cols (count col-totals)
+        new-counts (vec (repeat (* n-rows n-cols)  0))]
+    (r/reduce (fn [n i]
+                (update n (+ (* (row-indexes i) n-cols) (shuffled-col-indexes i)) inc))
+              new-counts
+              (range (count row-indexes)))))
 
-#_(let [flat-table (flatten-table (table-with-row-totals wealth-table))]
-    (chi-squared flat-table (:observed flat-table)))
+(defn health-wealth-chi-squared-experiment
+  [wealth-table bootstraps]
+  (let [flat-table (flatten-table (table-with-row-totals wealth-table))
+        observed-chi-squared (chi-squared flat-table (:observed flat-table))
+        n-rows (count wealth-table)
+        n-cols (count (second (first wealth-table)))]
+    [observed-chi-squared
+     (r/reduce
+      (fn [successes this-observation]
+        (if (>= (chi-squared flat-table this-observation)
+                observed-chi-squared) (inc successes) successes))
+      0
+      (repeatedly bootstraps #(->> (chi-shuffle (:row-totals flat-table) (:col-totals flat-table)))))]))
+
+(let [[observed-chi-squared successes] (health-wealth-chi-squared-experiment wealth-table  10000)]
+  (println (format "Observed chi-squared: %.2f" observed-chi-squared))
+  (println (format "%d out of 10000 experiments had a chi-squared difference greater than or equal to %.2f" successes observed-chi-squared))
+  (println (format "Probability that chance alone gave us a chi-squared greater than or equal to %.2f is %.2f" observed-chi-squared (float (/ successes 10000)))))

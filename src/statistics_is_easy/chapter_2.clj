@@ -1,20 +1,22 @@
-(ns stats.statistics-is-easy.chapter-2)
+(ns statistics-is-easy.chapter-2
+  (:require [clojure.core.reducers :as r]))
 
-(def bootstraps 1000)
+(def bootstraps 10000)
 
-(defn avg
+(defn average
   [values]
   (/ (apply + values) (count values)))
 
 (defn M>?
   [e values]
-  (> (avg values) e))
+  (> (average values) e))
 
 (defn power
   [values statistic-check power]
-  (-> (reduce
-       (fn [acc _] (if (statistic-check (repeatedly bootstraps #(rand-nth values))) (inc acc) acc))
-       (range 1000))
-      (> (* power 1000))))
+  (->> (range 1000)
+       (r/reduce
+        (fn [acc _] (if (statistic-check (repeatedly bootstraps #(rand-nth values))) (inc acc) acc))
+        0)
+       (< (* power 1000))))
 
 #_(power (repeatedly 100 #(rand-int 1000)) (partial M>? 800) 0.9)

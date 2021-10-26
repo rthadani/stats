@@ -1,7 +1,8 @@
-(ns stats.statistics-is-easy.chapter-1
+(ns statistics-is-easy.chapter-1
   (:require [aerial.hanami.templates :as ht]
             [kixi.stats.distribution :as kstatsd]
             [kixi.stats.test :as ktest]
+            [fastmath.stats :as fstat]
             [kixi.stats.core :as kcore]
             [scicloj.notespace.v4.api :as notespace]
             [scicloj.kindly.kind :as kind] ; a collection of known kinds of notes
@@ -14,11 +15,15 @@
   (notespace/stop!))
 
 (defn make-bar-chart-data
+  "Binning automatically in vega messes up the visualization"
   [sample]
   (->> sample
        (group-by identity)
        (map (fn [[num-heads values]] {:x num-heads :y (count values)}))))
 
+;; ## Do an experiment where we see 15 out of 17 heads in a fair coin
+;; What do successes(tossing a head) look like when doing it 17 times using a binomial distribution
+^kind/vega
 (-> (kstatsd/sample 10000 (kstatsd/binomial {:n 17 :p 0.5}))
     make-bar-chart-data
     viz/data
@@ -26,10 +31,23 @@
     (viz/y :y {:YTITLE "number of samples"})
     (viz/type ht/bar-chart)
     viz/viz
-    (kindly/consider kind/vega))
+    (assoc-in [:encoding :y :scale] {:zero false}))
 
-;;Do an experiment where we see 15 out of 17 heads in a fair coin
+^kind/vega
+(-> (map (fn [s] {:x s :y 1}) (kstatsd/sample 10000 (kstatsd/binomial {:n 17 :p 0.5})))
+    viz/data
+    (viz/x :x {:XTITLE "number of heads out of 17 tosses"})
+    (viz/y :y {:YTITLE "number of samples" :aggregate "sum"})
+    (viz/type ht/bar-chart)
+    viz/viz
+    (update-in [:encoding :y] merge  {:scale {:zero false} :aggregate "sum"})
+    (update-in [:encoding :x] merge {:binned true :step 0}))
+
 (defn apply-prob
+  "Create a large number of buckets to draw from  and split them up based on the p parameter.
+ Any random drawing that draws from the right side is considered a success
+ p indicates the probability of a success and is used to split a bucket into two
+ n is the number of times we want to try an experiment in the case of this one we want to toss a coin 17 times"
   [p n]
   (let [draw-space (-> (/ 1 p) (* 1000) (+ 0.05))]
     (reduce (fn [success draw]
@@ -39,6 +57,9 @@
             0
             (repeatedly n #(rand-int draw-space)))))
 
+;; See what one run looks like when flipping an experiment 17 times
+(apply-prob 0.5 17)
+
 (defn experiment
   [observed trials success-probability num-bootstraps]
   (let [experimental-successes (repeatedly num-bootstraps #(apply-prob success-probability trials))
@@ -47,6 +68,11 @@
      :num-bootstraps num-bootstraps
      :observed-probability (float (/ count-good num-bootstraps))}))
 
+;; Do the experiment 10000 times of flipping a coin 17 times and noting whether a head or tails shows up.
+;; If the probability(p-value) of the observed is small < 0.05 we reject the null hypothesis"
+(experiment 15 17 0.5 10000)
+
+; Do the same by drawing samples from  the binomial distribution in kixi stats 
 (defn k-stats-experiment
   [observed num-experiments success-probability num-bootstraps]
   (let [count-good (->> {:n num-experiments :p success-probability}
@@ -58,83 +84,66 @@
      :num-bootstraps num-bootstraps
      :observed-probability (float (/ count-good num-bootstraps))}))
 
-;;calculate the p-value
-;;For standard deviation example here 
-;;https://stats.stackexchange.com/questions/21581/how-to-assess-whether-a-coin-tossed-900-times-and-comes-up-heads-490-times-is-bi
+(k-stats-experiment 15 17 0.5 10000)
 (def population 17)
-(ktest/p-value (ktest/simple-z-test {:mu (/ population 2) :sd (Math/sqrt (* (/ 1 2) (/ 1 2) (/ population 2)))} {:mean 15 :n 17}))
+;;
+(ktest/p-value (ktest/simple-z-test {:mu (* population 0.5) :sd (Math/sqrt (* population 0.5 0.5))}
+                                    {:mean 15 :n 17}))
 
-(defn print-results [{:keys [count-good num-bootstraps observed-probability]} label]
+(defn print-results
+  "Print the result similar to whats in the book"
+  [{:keys [count-good num-bootstraps observed-probability]} label]
   (println (format "%s -- %d out of %d times we got atleast the %d number of heads in %d tosses\nProbability that chance alone gave us atleast %d heads in %d tosses is %f" label count-good num-bootstraps 15 17 15 17 observed-probability)))
 
 (print-results (k-stats-experiment 15 17 0.5 10000) "kixi-stats")
 (print-results (experiment 15 17 0.5 10000) "sie-stats")
 
-;;t-test to check the effectiveness of a drug
+;; ### Student's T-test to check the effectiveness of a drug
+;; To check the effectiveness of a drug we test it against a placebo, the numbers indicate the measured improvement
 (def placebo [54 51 58 44 55 52 42 47 58 46])
 (def drug [54 73 53 70 73 68 52 65 65])
-(defn make-labels
-  [sample label]
-  (map (fn [s] [s label]) sample))
 
 (defn avg
+  "The average function should have used a library"
   [s]
   (-> (apply + s)
       (/ (count s))))
 
 (defn avg-diff
+  "Take the average and get a diff"
   [s1 s2]
   (Math/ceil (- (avg s1) (avg s2))))
 
+(avg-diff drug placebo)
+
 (defn shuffled-avg-diff
-  [l1 l2]
-  (let [all-together (concat l1 l2)
-        label-real (second (first l1))
-        label-fake (second (first l2))
-        shuffled-labels (shuffle (map second all-together))
-        new-labelled-1 (map (fn [s l] [s l]) (map first l1) shuffled-labels)
-        new-labelled-2 (map (fn [s l] [s l]) (map first l2) (drop (count l1) shuffled-labels))
-        [new-sample-1 new-sample-2] (->> (concat new-labelled-2 new-labelled-1)
-                                         (group-by second)
-                                         vals)
-        [new-real-sample new-fake-sample] (if (= (second (first new-sample-1)) label-real)
-                                            [new-sample-1 new-sample-2]
-                                            [new-sample-2 new-sample-1])]
-    (avg-diff (map first new-real-sample) (map first new-fake-sample))))
+  "Combine, shuffle, resplit the sample and the population and then check the differences in average. 
+  If the difference turns out to be a by chance then other combinations of the values can also provide the 
+  same difference in average as the observed value"
+  [sample population]
+  (let [all-together (shuffle (concat sample population))
+        new-sample (take (count sample) all-together)
+        new-population (drop (count sample) all-together)]
+    (avg-diff new-sample new-population)))
 
-(def labelled-drug-sample (make-labels drug "D"))
-(def labelled-placebo-sample (make-labels placebo "P"))
-
-(->  (repeatedly 10000 #(shuffled-avg-diff labelled-drug-sample labelled-placebo-sample))
+;; ### Visually check the difference in means
+^kind/vega
+(->  (repeatedly 10000 #(shuffled-avg-diff drug placebo))
      make-bar-chart-data
      viz/data
      (viz/x :x {:XTITLE "difference between means"})
      (viz/y :y {:YTITLE "bootstrap samples"})
      (viz/type ht/bar-chart)
-     viz/viz
-     (kindly/consider kind/vega))
+     viz/viz)
 
-(let [observed-diff (avg-diff drug placebo)
-      experiment-diff (repeatedly 10000 #(shuffled-avg-diff labelled-drug-sample labelled-placebo-sample))
-      count-good (->> experiment-diff
-                      (filter #(>= % observed-diff))
-                      count)
-      observed-probability (float (/ count-good 10000))]
-  (println (format "%d out of %d experiments had a difference of two means greater than or equal to %f\nThe chance of getting a difference of two means greater than or equal to %f is %f" count-good 10000 observed-diff observed-diff observed-probability)))
-
-;;Would like to know if this is correct
-(ktest/p-value (ktest/simple-t-test {:mu (kcore/mean placebo) :sd (kcore/standard-deviation placebo)}  {:mean (kcore/mean drug) :n (count drug)}))
-;;(kstatsd/sample 100 (kstatsd/t {:v (dec (count drug))}))
-
-;;confidence intervals for differennce in means
+;; ### Confidence intervals for difference in means
 (defn bootstrap-avg
   [sample]
   (-> (repeatedly (count sample) #(rand-nth sample))
       avg))
-#_(repeatedly (count drug) #(rand-nth drug))
-#_(bootstrap-avg drug)
 
 (defn confidence-intervals
+  "Pick a random sample with replacement calculate the statistic (difference in avgs)"
   [percentile num-bootstraps drug placebo tails]
   (let [edge (/ (- 1 percentile) tails)
         lower-index (Math/ceil (* edge num-bootstraps))
@@ -146,4 +155,19 @@
      :min (first diffs)
      :max (last diffs)}))
 
-#_(confidence-intervals 0.90 10000 drug placebo 2)
+;; 90% Confidence interval for drug and placebo 
+(confidence-intervals 0.90 10000 drug placebo 2)
+
+(let [observed-diff (avg-diff drug placebo)
+      experiment-diff (repeatedly 10000 #(shuffled-avg-diff drug placebo))
+      count-good (->> experiment-diff
+                      (filter #(>= % observed-diff))
+                      count)
+      observed-probability (float (/ count-good 10000))]
+  (println (format "%d out of %d experiments had a difference of two means greater than or equal to %f\nThe chance of getting a difference of two means greater than or equal to %f is %f" count-good 10000 observed-diff observed-diff observed-probability))
+  observed-probability)
+
+;; ## Finally use fast math since I am making some sort of mistake in the params for kixi stats
+(fstat/ttest-two-samples drug placebo)
+(ktest/p-value (ktest/simple-t-test {:mu (kcore/mean placebo) :sd (kcore/standard-deviation placebo)}  {:mean (kcore/mean drug) :n (count drug)}))
+(ktest/p-value (ktest/simple-t-test {:mu (kcore/mean placebo) :sd (kcore/standard-deviation placebo)}  {:mean (kcore/mean drug) :n (count drug)}))
