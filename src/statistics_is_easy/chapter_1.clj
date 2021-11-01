@@ -175,7 +175,7 @@
 
 ;;;; Option A: calculate summary statistics independently ;;;;
 ;;
-;; (We're using t-test, not simple-t-testm because the latter compares a sample
+;; (We're using t-test, not simple-t-test because the latter compares a sample
 ;; against a population whereas we have two samples to compare
 
 ;; First define reducing function which returns summary statistics:
@@ -200,14 +200,13 @@
 ;; Then define reducing function appropriate for this single sequence:
 (defn t-test-reducing-function
   [label-a label-b]
-  (redux.core/post-complete
-   (redux.core/facet
-    (redux.core/fuse
-     {:mean kcore/mean
-      :sd kcore/standard-deviation
-      :n ((remove nil?) kcore/count)})
-    [label-a label-b])
-   (comp ktest/p-value (partial apply ktest/t-test))))
+  (-> {:mean kcore/mean
+       :sd kcore/standard-deviation
+       :n ((remove nil?) kcore/count)}
+      (redux.core/fuse)
+      (redux.core/facet [label-a label-b])
+      (redux.core/post-complete
+       (comp ktest/p-value (partial apply ktest/t-test)))))
 
 (transduce identity (t-test-reducing-function :placebo :drug) data)
 ;; => 0.0018017423704935023
