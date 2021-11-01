@@ -167,7 +167,47 @@
   (println (format "%d out of %d experiments had a difference of two means greater than or equal to %f\nThe chance of getting a difference of two means greater than or equal to %f is %f" count-good 10000 observed-diff observed-diff observed-probability))
   observed-probability)
 
-;; ## Finally use fast math since I am making some sort of mistake in the params for kixi stats
-(fstat/ttest-two-samples drug placebo)
-(ktest/p-value (ktest/simple-t-test {:mu (kcore/mean placebo) :sd (kcore/standard-deviation placebo)}  {:mean (kcore/mean drug) :n (count drug)}))
-(ktest/p-value (ktest/simple-t-test {:mu (kcore/mean placebo) :sd (kcore/standard-deviation placebo)}  {:mean (kcore/mean drug) :n (count drug)}))
+(-> (fstat/ttest-two-samples drug placebo)
+    :p-value)
+;; 0.001801742370493504
+
+;;;; Kixi.stats using transducers ;;;;
+
+;;;; Option A: calculate summary statistics independently ;;;;
+;;
+;; (We're using t-test, not simple-t-testm because the latter compares a sample
+;; against a population whereas we have two samples to compare
+
+;; First define reducing function which returns summary statistics:
+(def summary-stats
+  (redux.core/fuse {:mean kcore/mean
+                    :sd kcore/standard-deviation
+                    :n kcore/count}))
+
+;; Then calculate the pair of summaries and pass to t-test:
+(-> (ktest/t-test (transduce identity summary-stats placebo)
+                  (transduce identity summary-stats drug))
+    (ktest/p-value))
+;; 0.0018017423704935023
+
+;;;; Option B: build a more sophisticated reducing function ;;;;
+
+;; First reshape our data into a single labelled sequence:
+(def data
+  (concat (map (partial hash-map :placebo) placebo)
+          (map (partial hash-map :drug) drug)))
+
+;; Then define reducing function appropriate for this single sequence:
+(defn t-test-reducing-function
+  [label-a label-b]
+  (redux.core/post-complete
+   (redux.core/facet
+    (redux.core/fuse
+     {:mean kcore/mean
+      :sd kcore/standard-deviation
+      :n ((remove nil?) kcore/count)})
+    [label-a label-b])
+   (comp ktest/p-value (partial apply ktest/t-test))))
+
+(transduce identity (t-test-reducing-function :placebo :drug) data)
+;; => 0.0018017423704935023
