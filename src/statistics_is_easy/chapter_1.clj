@@ -178,35 +178,41 @@
 ;; (We're using t-test, not simple-t-test because the latter compares a sample
 ;; against a population whereas we have two samples to compare
 
-;; First define reducing function which returns summary statistics:
+;; First define reducing function (rf) which returns summary statistics:
+
 (def summary-stats
-  (redux.core/fuse {:mean kcore/mean
-                    :sd kcore/standard-deviation
-                    :n kcore/count}))
+  {:mean kcore/mean
+   :sd kcore/standard-deviation
+   :n kcore/count})
+
+(def summary-stats-rf
+  (redux.core/fuse summary-stats))
 
 ;; Then calculate the pair of summaries and pass to t-test:
-(-> (ktest/t-test (transduce identity summary-stats placebo)
-                  (transduce identity summary-stats drug))
+
+(-> (ktest/t-test (transduce identity summary-stats-rf placebo)
+                  (transduce identity summary-stats-rf drug))
     (ktest/p-value))
 ;; 0.0018017423704935023
 
 ;;;; Option B: build a more sophisticated reducing function ;;;;
 
 ;; First reshape our data into a single labelled sequence:
+
 (def data
   (concat (map (partial hash-map :placebo) placebo)
           (map (partial hash-map :drug) drug)))
 
 ;; Then define reducing function appropriate for this single sequence:
+
 (defn t-test-reducing-function
   [label-a label-b]
-  (-> {:mean kcore/mean
-       :sd kcore/standard-deviation
-       :n ((remove nil?) kcore/count)}
+  (-> summary-stats
+      (update :n (remove nil?)) ;; Only count maps containing the label
       (redux.core/fuse)
       (redux.core/facet [label-a label-b])
       (redux.core/post-complete
        (comp ktest/p-value (partial apply ktest/t-test)))))
 
 (transduce identity (t-test-reducing-function :placebo :drug) data)
-;; => 0.0018017423704935023
+;; 0.0018017423704935023
