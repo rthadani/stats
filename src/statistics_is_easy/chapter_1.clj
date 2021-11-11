@@ -180,10 +180,9 @@
 (delay (drug-experiment 10000 drug placebo))
 (def placebo-measure-2 [56 348 162 420 440 250 389 476 288 456])
 (def drug-measure-2 (mapv #(+ % 13) placebo-measure-2))
-(def placebo-measure-2 (mapv #(- % 13) drug))
 (delay (drug-experiment 10000 drug-measure-2 placebo-measure-2))
 
-(-> (fstat/ttest-two-samples drug placebo-measure-2)
+(-> (fstat/ttest-two-samples drug placebo)
     :p-value)
 ;; 0.001801742370493504
 
