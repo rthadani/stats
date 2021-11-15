@@ -177,6 +177,23 @@
 ;; 90% Confidence interval for drug and placebo 
 (delay (confidence-intervals 0.90 10000 drug placebo 2))
 
+;;power
+(defn is-significant?
+  [{:keys [observed-probability]}]
+  (<= observed-probability 0.05))
+
+(defn power
+  [experiment p]
+  (->> (range 1000) ;;do the following 1000 times
+       (pmap #(experiment %)) ;;run the experiment
+       (filter is-significant?) ;;filter out successes - experiments where the null hypothesis is false
+       count ;;count them
+       #_(< (* p 1000)))) ;;See if it rejects the null hypothesis atleast power times number of tries
+
+(delay (power (fn [experiment-number] (when (zero? (mod experiment-number 100))
+                                        (println "Running experiment" experiment-number))
+                (drug-experiment 10000 drug-measure-2 placebo-measure-2)) 0.8))
+
 (def xrule-chart
   (-> (assoc-in ht/xrule-layer [:encoding :x2] {:field :X2})
       (assoc :data ht/data-options)))

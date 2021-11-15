@@ -1,11 +1,11 @@
 (ns statistics-is-easy.chapter-2
   (:require [clojure.core.reducers :as r]))
 
-(def bootstraps 1000)
+(def bootstraps 10000)
 
 (defn avg
   [values]
-  (/ (apply + values) (count values)))
+  (/ (r/reduce + 0 values) (count values)))
 
 (defn M>?
   [e values]
@@ -15,24 +15,30 @@
 
 (defn power-experiment
   [values bootstraps statistic-check experiment-number]
-  #_(when (zero? (mod experiment-number 10))
-      (println "running experiment " experiment-number))
-  (->> (range bootstraps)
-       (r/reduce
-        (fn [acc _] (if (statistic-check (repeatedly (count values) #(rand-nth values)))
-                      (inc acc)
-                      acc))
-        0)
-       (< (* 0.95 bootstraps))))
+  (when (zero? (mod experiment-number 10))
+    (println "running experiment " experiment-number))
+  (let [count-good (->> (range bootstraps)
+                        (r/reduce
+                         (fn [acc _] (if (statistic-check (repeatedly (count values) #(rand-nth values)))
+                                       (inc acc)
+                                       acc))
+                         0))]
+    {:num-bootstraps bootstraps
+     :count-good count-good
+     :observed-probability (float (/ count-good bootstraps))}))
+
+(defn is-significant?
+  [{:keys [observed-probability]}]
+  (<= observed-probability 0.05))
 
 (defn power
-  [values bootstraps statistic-check p]
+  [experiment p]
   (->> (range 1000) ;;do the following 1000 times
-       (pmap (partial power-experiment values bootstraps statistic-check))
-       (filter true?) ;;filter out successes - where the null hypothesis is false
+       (pmap #(experiment %)) ;;run the experiment
+       (filter is-significant?) ;;filter out successes - experiments where the null hypothesis is false
        count ;;count them
        (< (* p 1000)))) ;;See if it rejects the null hypothesis atleast power times number of tries
 
 (def values (repeatedly 10 #(rand-int 10)))
 (println values)
-#_(power  values bootstraps (partial M>? 6) 0.8)
+#_(power  (partial power-experiment values bootstraps (partial M>? 6)) 0.8)
