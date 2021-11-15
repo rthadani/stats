@@ -17,7 +17,6 @@
 
 ;; ## Do an experiment where we see 15 out of 17 heads in a fair coin
 ;; What do successes(tossing a head) look like when doing it 17 times using a binomial distribution
-^kind/vega
 (-> (map (fn [s] {:x s :y 1}) (kstatsd/sample 10000 (kstatsd/binomial {:n 17 :p 0.5})))
     viz/data
     (viz/x :x {:XTITLE "number of heads out of 17 tosses"})
@@ -40,7 +39,6 @@
             0
             (repeatedly n #(rand-int draw-space)))))
 
-^kind/vega
 (-> (hc/xform ht/layer-chart
               :LAYER [(-> (map (fn [s] {:x s :y 1}) (repeatedly 10000 #(apply-prob 0.5 17)))
                           viz/data
@@ -130,7 +128,6 @@
     (avg-diff new-sample new-population)))
 
 ;; ### Visually check the difference in means
-^kind/vega
 (->  (repeatedly 10000 #(shuffled-avg-diff drug placebo))
      ((fn [data] (map (fn [r] {:x r :y 1}) data)))
      viz/data
@@ -148,22 +145,6 @@
 (count drug)
 (bootstrap-avg drug)
 
-(defn confidence-intervals
-  "Pick a random sample with replacement calculate the statistic (difference in avgs)"
-  [percentile num-bootstraps drug placebo tails]
-  (let [edge (/ (- 1 percentile) tails)
-        lower-index (Math/ceil (* edge num-bootstraps))
-        upper-index (Math/floor (* (- 1 edge) num-bootstraps))
-        diffs (-> (repeatedly num-bootstraps #(- (bootstrap-avg drug) (bootstrap-avg placebo)))
-                  sort)]
-    {:lower (float (nth diffs lower-index))
-     :upper (float (nth diffs upper-index))
-     :min (first diffs)
-     :max (last diffs)}))
-
-;; 90% Confidence interval for drug and placebo 
-(delay (confidence-intervals 0.90 10000 drug placebo 2))
-
 (defn drug-experiment
   [num-bootstraps drug placebo]
   (let [observed-diff (avg-diff drug placebo)
@@ -176,6 +157,57 @@
     {:num-bootstraps num-bootstraps
      :count-good count-good
      :observed-probability observed-probability}))
+
+(defn confidence-intervals
+  "Pick a random sample with replacement calculate the statistic (difference in avgs)"
+  [percentile num-bootstraps drug placebo tails]
+  (let [edge (/ (- 1 percentile) tails)
+        lower-index (Math/ceil (* edge num-bootstraps))
+        upper-index (Math/floor (* (- 1 edge) num-bootstraps))
+        diffs (-> (repeatedly num-bootstraps #(- (bootstrap-avg drug) (bootstrap-avg placebo)))
+                  sort
+                  vec)]
+    {:lower (float (nth diffs lower-index))
+     :upper (float (nth diffs upper-index))
+     :min (float (first diffs))
+     :max (float (last diffs))
+     :avg (float (avg diffs))
+     #_:raw-data #_diffs}))
+
+;; 90% Confidence interval for drug and placebo 
+(delay (confidence-intervals 0.90 10000 drug placebo 2))
+
+(def xrule-chart
+  (-> (assoc-in ht/xrule-layer [:encoding :x2] {:field :X2})
+      (assoc :data ht/data-options)))
+
+(let [ci (confidence-intervals 0.90 10000 drug placebo 2)]
+  (-> (hc/xform ht/layer-chart
+                :LAYER [(hc/xform xrule-chart
+                                  :X "min"
+                                  :XTYPE "quantitative"
+                                  :X2 "max"
+                                  :VALDATA [ci]
+                                  :XZERO false)
+                        (-> (hc/xform ht/bar-chart
+                                      :X "lower"
+                                      :YBIN hc/RMV
+                                      :VALDATA [ci]
+                                      :TOOLTIP hc/RMV
+                                      :SIZE 14)
+                            (update :encoding dissoc :y)
+                            (assoc-in [:encoding :x2] {:field "upper"}))
+                        (-> (hc/xform ht/point-chart
+                                      :X "avg"
+                                      :YBIN hc/RMV
+                                      :VALDATA [ci]
+                                      :SIZE 14
+                                      :MCOLOR "red"
+                                      :TOOLTIP hc/RMV)
+                            (update :encoding dissoc :y)
+                            (assoc :tooltip [{:field "avg"}]))]
+                :HEIGHT 40)
+      (kindly/consider kind/vega)))
 
 (delay (drug-experiment 10000 drug placebo))
 (def placebo-measure-2 [56 348 162 420 440 250 389 476 288 456])
@@ -231,9 +263,7 @@
 
 (transduce identity (t-test-reducing-function :placebo :drug) data)
 ;; 0.0018017423704935023
-;; ## Finally use fast math since I am making some sort of mistake in the params for kixi stats
-(fstat/ttest-two-samples drug placebo)
-(ktest/p-value (ktest/simple-t-test {:mu (kcore/mean placebo) :sd (kcore/standard-deviation placebo)}  {:mean (kcore/mean drug) :n (count drug)}))
+;;(fstat/ttest-two-samples drug placebo)
 
 ;;### Terminology used in the namespace
 ;; - Binomial distribution: the binomial distribution with parameters n and p is the discrete probability distribution of the number of successes in a sequence of n independent experiments
