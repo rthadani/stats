@@ -12,18 +12,21 @@
 
 ^kind/hidden
 (comment
-  (notespace/restart! {})
+
+  (notespace/restart! {:notes?     true
+                       :header?    false
+                       :last-eval? false})
   (notespace/restart-events!)
   (notespace/stop!))
 
 ;# An introduction to statistical inference
 
 ;## Goals
-;- Derive conclusions using first principles 
-;- Use resampling or shuffling can be used to derive information from the experiment being conducted
+;- Derive conclusions from first principles 
+;- Use randomization techniques known collectively as resampling to derive information from the experiment being conducted
+;- To answer questions on how accurate a measurement is likely to be and could it have happened by mistake
 ;- Some real world applications
 ;- Practical considerations
-;- Hopefully generate some curiosity to read other techniques in the book "Statistics is easy by Denis Shasha and Manda WIlson" 
 
 ;
 ;;## Is a coin fair if I told you that I observed 15 heads in 17 coin tosses  
@@ -87,12 +90,21 @@
 ;3. Repeat 1 and 2 many many times
 ;4. Sort the results and pick the ends based on the desired confidence interval
 
-;##Power
+;## Power
 ;The power of a test is the probability of rejecting the null hypothseis when it is false 
 
-;## Dealing with outliers
-;Rank transformations
+;##  Outliers 
+;; Suppose we were measuring the confidence interval of average salaries as a precursor to the evaluation of does college 
+;; education affect salary. But we have Bill Gates' salary in the mix
+(def salaries [200 69 141 45 154 169 142 198 178 197 1000000 166 188 178 129 87 151 101 187 154])
 
+;## Other evauation methods
+;-  Chi-Squared - Measure the deviation of observed data for multiple categories from expectation or test the independence of two variables
+;- Fischers Exact test - like chi squared for four categories and expected counts are below 10
+; - ANOVA - How different groups are when  independent variable/s is/are changed(One way , multi way)
+; - LInear regression
+; - Linear corelation - How well a variable  can predict another if a linear relationship exists
+; - Multiple Testing -
 
 ;## Practical considerations
 ;- Bootstrapping - When sample sizes are small (under 100) we may under estimate the size of the confidence interval and a significance test may work better
@@ -101,6 +113,10 @@
 ;- Bootstrapping should be used with caution when there are outliers
 ;- Neither bootstrapping nor sampling should be used if the sample is not representative
 ;- Resampling should be used with care when data exhibits serial dependence.
+
+;## References
+;- Statistics is easy - Dennis Shasha, Manda Wilson
+;- Bootstrap methods and their application - D.V. Hinkley, A.C. Davidson
 
 ;## Terminology used in the namespace
 ; - Binomial distribution: the binomial distribution with parameters n and p is the discrete probability distribution of the number of successes in a sequence of n independent experiments

@@ -280,6 +280,26 @@
 
 (transduce identity (t-test-reducing-function :placebo :drug) data)
 ;; 0.0018017423704935023
+
+;;Outliers
+(def salaries [200 69 141 45 154 169 142 198 178 197 1000000 166 188 178 129 87 151 101 187 154])
+(defn confidence-intervals
+  "Pick a random sample with replacement calculate the statistic (difference in avgs)"
+  [percentile num-bootstraps salaries tails]
+  (let [edge (/ (- 1 percentile) tails)
+        lower-index (Math/ceil (* edge num-bootstraps))
+        upper-index (Math/floor (* (- 1 edge) num-bootstraps))
+        diffs (-> (repeatedly num-bootstraps #(bootstrap-avg salaries))
+                  sort
+                  vec)]
+    {:lower (float (nth diffs lower-index))
+     :upper (float (nth diffs upper-index))
+     :min (float (first diffs))
+     :max (float (last diffs))
+     :avg (float (avg diffs))
+     #_:raw-data #_diffs}))
+(confidence-intervals 0.90 10000 salaries 2)
+
 ;;(fstat/ttest-two-samples drug placebo)
 
 ;;### Terminology used in the namespace
