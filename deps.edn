@@ -1,9 +1,9 @@
 {:paths ["src" "resources"]
  :deps {org.clojure/clojure {:mvn/version "1.10.1"}
-        scicloj/scicloj.ml   {:mvn/version "0.1.0-beta3"}
-        scicloj/notespace    {:mvn/version "4-pre-alpha-2-SNAPSHOT"}
-        org.scicloj/viz.clj  {:mvn/version "0.1.0-SNAPSHOT"}
-        techascent/tech.viz  {:mvn/version "6.00-beta-16-2"}}
+        org.scicloj/viz.clj  {:mvn/version "0.1.1-SNAPSHOT"}
+        techascent/tech.viz  {:mvn/version "6.00-beta-16-2"}
+        kixi/stats {:mvn/version "0.5.4"}
+        io.github.nextjournal/clerk {:mvn/version "0.5.346"} }
  :aliases
  {:test {:extra-paths ["test"]
          :extra-deps {org.clojure/test.check {:mvn/version "1.0.0"}}}

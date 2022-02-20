@@ -1,29 +1,33 @@
 (ns statistics-is-easy.chapter-1
   (:require [aerial.hanami.templates :as ht]
             [aerial.hanami.common :as hc]
-            [kixi.stats.distribution :as kstatsd]
-            [kixi.stats.test :as ktest]
             [fastmath.stats :as fstat]
             [kixi.stats.core :as kcore]
-            [scicloj.notespace.v4.api :as notespace]
-            [scicloj.kindly.kind :as kind] ; a collection of known kinds of notes
-            [scicloj.kindly.api :as kindly]
+            [kixi.stats.distribution :as kstatsd]
+            [kixi.stats.test :as ktest]
+            [nextjournal.clerk :as clerk]
             [scicloj.viz.api :as viz]))
 
-(comment
-  (notespace/restart! {})
-  (notespace/restart-events!)
-  (notespace/stop!))
 
 ;; ## Do an experiment where we see 15 out of 17 heads in a fair coin
 ;; What do successes(tossing a head) look like when doing it 17 times using a binomial distribution
-(-> (map (fn [s] {:x s :y 1}) (kstatsd/sample 10000 (kstatsd/binomial {:n 17 :p 0.5})))
-    viz/data
-    (viz/x :x {:XTITLE "number of heads out of 17 tosses"})
-    (viz/y :y {:YTITLE "number of samples" :YAGG "sum"})
-    (assoc :TOOLTIP [{:field "x" :type "quantitative"} {:field :y :aggregate :YAGG}])
-    (viz/type ht/bar-chart)
-    viz/viz)
+
+(defn render-one
+  [color x-title y-title xy]
+  (hc/xform ht/bar-chart
+                :DATA xy 
+                :X :x
+                :Y :y
+                :XTITLE x-title
+                :YTITLE y-title
+                :YAGG "sum"
+                :MCOLOR color
+                :TOOLTIP [{:field "x" :type "quantitative"} {:field :y :aggregate :YAGG}]))
+
+(->> (kstatsd/sample 10000 (kstatsd/binomial {:n 17 :p 0.5}))
+     (map (fn [s] {:x s :y 1}))
+     (render-one "blue" "number of heads out of 17 tossses" "number of samples")
+     clerk/vl)
 
 (defn apply-prob
   "Create a large number of buckets to draw from  and split them up based on the p parameter.
@@ -39,27 +43,22 @@
             0
             (repeatedly n #(rand-int draw-space)))))
 
-(-> (hc/xform ht/layer-chart
-              :LAYER [(-> (map (fn [s] {:x s :y 1}) (repeatedly 10000 #(apply-prob 0.5 17)))
-                          viz/data
-                          (viz/x :x {:XTITLE "fair coin tosses"})
-                          (viz/y :y {:YTITLE "number of samples" :YAGG "sum"})
-                          (assoc :TOOLTIP [{:field "x" :type "quantitative"} {:field :y :aggregate :YAGG}])
-                          (viz/type ht/bar-chart)
-                          viz/viz)
-                      (-> (map (fn [s] {:x s :y 1}) (repeatedly 10000 #(apply-prob (float (/ 15 17)) 17)))
-                          viz/data
-                          (viz/x :x {:XTITLE "unfair coin tosses"})
-                          (viz/y :y {:YTITLE "" :YAGG "sum"})
-                          (viz/color  {:value "red"})
-                          (assoc :TOOLTIP [{:field "x" :type "quantitative"} {:field :y :aggregate :YAGG}])
-                          (viz/type ht/bar-chart)
-                          viz/viz)])
-    (kindly/consider kind/vega))
+(->> (repeatedly 10000 #(apply-prob 0.5 17))
+     (map (fn [s] {:x s :y 1}))
+     (render-one "blue" "number of samples" "number of heads out of 17 tossses")
+     clerk/vl)
+
 
 ;; See what one run looks like when flipping an experiment 17 times
-(delay (apply-prob 0.5 17))
+(apply-prob 0.5 17)
+(defn render-ab
+  [a-prob b-prob trials x-label y-label]
+  (-> (hc/xform ht/layer-chart
+                :LAYER [(render-one "blue" (map (fn [s] {:x s :y 1}) (repeatedly 10000 #(apply-prob a-prob trials))) x-label y-label) 
+                        (render-one "red" (map (fn [s] {:x s :y 1}) (repeatedly 10000 #(apply-prob b-prob trials))) "" "")])
+      (clerk/vl)))
 
+(render-ab 0.5 (/ 15 17) 17 "number of samples" "number of heads out of 17 tosses")
 (defn experiment
   [observed trials success-probability num-bootstraps]
   (let [experimental-successes (repeatedly num-bootstraps #(apply-prob success-probability trials))
@@ -70,7 +69,7 @@
 
 ;; Do the experiment 10000 times of flipping a coin 17 times and noting whether a head or tails shows up.
 ;; If the probability(p-value) of the observed is small < 0.05 we reject the null hypothesis"
-(delay (experiment 15 17 0.5 10000))
+(experiment 15 17 0.5 10000)
 
 ; Do the same by drawing samples from  the binomial distribution in kixi stats 
 (defn k-stats-experiment
@@ -84,20 +83,20 @@
      :num-bootstraps num-bootstraps
      :observed-probability (float (/ count-good num-bootstraps))}))
 
-(delay k-stats-experiment 15 17 0.5 10000)
+(k-stats-experiment 15 17 0.5 10000)
 
 (def population 17)
 ;;Try using the kixi stats library to determine the p-value
 (ktest/p-value (ktest/simple-z-test {:mu (* population 0.5) :sd (Math/sqrt (* population 0.5 0.5))}
                                     {:mean 15 :n 17}))
 
-(defn print-results
+(defn format-result
   "Print the result similar to whats in the book"
   [{:keys [count-good num-bootstraps observed-probability]} label]
-  (println (format "%s -- %d out of %d times we got atleast the %d number of heads in %d tosses\nProbability that chance alone gave us atleast %d heads in %d tosses is %f" label count-good num-bootstraps 15 17 15 17 observed-probability)))
+  (format "%s -- %d out of %d times we got atleast the %d number of heads in %d tosses\nProbability that chance alone gave us atleast %d heads in %d tosses is %f" label count-good num-bootstraps 15 17 15 17 observed-probability))
 
-(delay (print-results (k-stats-experiment 15 17 0.5 10000) "kixi-stats"))
-(delay (print-results (experiment 15 17 0.5 10000) "sie-stats"))
+(format-result (k-stats-experiment 15 17 0.5 10000) "kixi-stats")
+(format-result (experiment 15 17 0.5 10000) "sie-stats")
 
 ;; ### Test to check the effectiveness of a drug
 ;; To check the effectiveness of a drug we test it against a placebo, the numbers indicate the measured improvement
@@ -128,14 +127,10 @@
     (avg-diff new-sample new-population)))
 
 ;; ### Visually check the difference in means
-(->  (repeatedly 10000 #(shuffled-avg-diff drug placebo))
-     ((fn [data] (map (fn [r] {:x r :y 1}) data)))
-     viz/data
-     (viz/x :x {:XTITLE "difference between means"})
-     (viz/y :y {:YTITLE "bootstrap samples" :YAGG "sum"})
-     (assoc :TOOLTIP [{:field "x" :type "quantitative"} {:field :y :aggregate :YAGG}])
-     (viz/type ht/bar-chart)
-     viz/viz)
+(->> (repeatedly 10000 #(shuffled-avg-diff drug placebo))
+     (map (fn [s] {:x s :y 1}))
+     (render-one "blue" "difference between means" "bootstrap samples")
+     clerk/vl)
 
 ;; ### Confidence intervals for difference in means
 (defn bootstrap-avg
@@ -158,6 +153,7 @@
      :count-good count-good
      :observed-probability observed-probability}))
 
+
 (defn confidence-intervals
   "Pick a random sample with replacement calculate the statistic (difference in avgs)"
   [percentile num-bootstraps drug placebo tails]
@@ -175,7 +171,7 @@
      #_:raw-data #_diffs}))
 
 ;; 90% Confidence interval for drug and placebo 
-(delay (confidence-intervals 0.90 10000 drug placebo 2))
+(confidence-intervals 0.90 10000 drug placebo 2)
 
 ;;power
 (defn is-significant?
@@ -192,7 +188,7 @@
 
 (delay (power (fn [experiment-number] (when (zero? (mod experiment-number 100))
                                         (println "Running experiment" experiment-number))
-                (drug-experiment 10000 drug-measure-2 placebo-measure-2)) 0.8))
+                (drug-experiment 10000 drug placebo)) 0.8))
 
 (def xrule-chart
   (-> (assoc-in ht/xrule-layer [:encoding :x2] {:field :X2})
@@ -224,7 +220,7 @@
                             (update :encoding dissoc :y)
                             (assoc :tooltip [{:field "avg"}]))]
                 :HEIGHT 40)
-      (kindly/consider kind/vega)))
+      (clerk/vl)))
 
 (delay (drug-experiment 10000 drug placebo))
 (def placebo-measure-2 [56 348 162 420 440 250 389 476 288 456])

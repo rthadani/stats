@@ -32,12 +32,13 @@
   (<= observed-probability 0.05))
 
 (defn power
-  [experiment p]
+  [experiment & [p]]
   (->> (range 1000) ;;do the following 1000 times
        (pmap #(experiment %)) ;;run the experiment
        (filter is-significant?) ;;filter out successes - experiments where the null hypothesis is false
        count ;;count them
-       (< (* p 1000)))) ;;See if it rejects the null hypothesis atleast power times number of tries
+       ((fn [c] (if p (< (* p 1000) c) (/ c 1000))))))
+ ;;See if it rejects the null hypothesis atleast power times number of tries
 
 (def values (repeatedly 10 #(rand-int 10)))
 (println values)
