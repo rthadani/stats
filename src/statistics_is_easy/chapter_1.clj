@@ -52,13 +52,13 @@
 ;; See what one run looks like when flipping an experiment 17 times
 (apply-prob 0.5 17)
 (defn render-ab
-  [a-prob b-prob trials x-label y-label]
+  [a-prob b-prob trials y-label]
   (-> (hc/xform ht/layer-chart
-                :LAYER [(render-one "blue" (map (fn [s] {:x s :y 1}) (repeatedly 10000 #(apply-prob a-prob trials))) x-label y-label) 
-                        (render-one "red" (map (fn [s] {:x s :y 1}) (repeatedly 10000 #(apply-prob b-prob trials))) "" "")])
-      (clerk/vl)))
+                :LAYER [(render-one "blue" "A" y-label (map (fn [s] {:x s :y 1}) (repeatedly 10000 #(apply-prob a-prob trials)))) 
+                        (render-one "red" "B" "" (map (fn [s] {:x s :y 1}) (repeatedly 10000 #(apply-prob b-prob trials))))])
+      clerk/vl))
 
-(render-ab 0.5 (/ 15 17) 17 "number of samples" "number of heads out of 17 tosses")
+(render-ab 0.5 (/ 15 17) 17 "number of samples")
 (defn experiment
   [observed trials success-probability num-bootstraps]
   (let [experimental-successes (repeatedly num-bootstraps #(apply-prob success-probability trials))

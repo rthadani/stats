@@ -1,8 +1,9 @@
 {:paths ["src" "resources"]
  :deps {org.clojure/clojure {:mvn/version "1.10.1"}
-        org.scicloj/viz.clj  {:mvn/version "0.1.1-SNAPSHOT"}
-        techascent/tech.viz  {:mvn/version "6.00-beta-16-2"}
+        ;;org.scicloj/viz.clj  {:mvn/version "0.1.1-SNAPSHOT"}
+        ;;techascent/tech.viz  {:mvn/version "6.00-beta-16-2"}
         kixi/stats {:mvn/version "0.5.4"}
+        aerial.hanami/aerial.hanami {:mvn/version "0.15.1"}
         io.github.nextjournal/clerk {:mvn/version "0.5.346"} }
  :aliases
  {:test {:extra-paths ["test"]
